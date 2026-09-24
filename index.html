@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<!-- Защита: странице запрещены любые сетевые запросы (connect-src 'none'),
+     загрузка чего-либо со сторонних адресов и отправка форм. Проверяется при каждом запуске. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'none'; worker-src 'self'; manifest-src 'self'; form-action 'none'; base-uri 'none'; object-src 'none'; frame-src 'none'; media-src 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="format-detection" content="telephone=no, date=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Допуск СБ">
+<meta name="theme-color" content="#1f6b4f">
+<title>Допуск СБ</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header class="top">
+  <h1>Допуск СБ</h1>
+  <div class="pills">
+    <span id="pillNet" class="pill wait">Проверяю защиту…</span>
+    <span id="pillOnline" class="pill"></span>
+  </div>
+</header>
+
+<main>
+  <section class="card">
+    <h2><span class="n">1</span>Куда</h2>
+    <label class="lbl" for="gosbQ">ГОСБ, регион или город</label>
+    <input id="gosbQ" type="search" placeholder="8619, Кубань, Ростов…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+    <ul id="gosbList" class="pick" hidden></ul>
+    <div id="gosbChosen" class="chosen" hidden></div>
+  </section>
+
+  <section class="card">
+    <h2><span class="n">2</span>Письмо</h2>
+    <div class="grid2">
+      <div>
+        <label class="lbl" for="outNo">Номер исходящего</label>
+        <div class="with-suffix"><input id="outNo" type="text" inputmode="numeric" autocomplete="off"><span id="outNoSuffix" class="suffix"></span></div>
+      </div>
+      <div>
+        <label class="lbl" for="letterDate">Дата письма</label>
+        <input id="letterDate" type="date">
+      </div>
+    </div>
+    <div class="lbl">Начало допуска</div>
+    <div class="seg" role="radiogroup">
+      <label><input type="radio" name="start" value="same" checked><span>С даты письма</span></label>
+      <label><input type="radio" name="start" value="next"><span>Со следующего дня</span></label>
+    </div>
+    <p id="period" class="muted"></p>
+  </section>
+
+  <section class="card">
+    <h2><span class="n">3</span>Люди</h2>
+    <p class="muted small">Вставьте текст из письма коллеги или откройте файл: Excel, Word, PDF, текст. Для скана: «Текст на фото» на iPhone, затем вставить.</p>
+    <div class="row">
+      <button id="btnPaste" class="btn">Вставить из буфера</button>
+      <label class="btn file">Открыть файл<input id="fileIn" type="file" accept=".xlsx,.xlsm,.docx,.pdf,.txt,.csv,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden></label>
+    </div>
+    <textarea id="src" rows="6" placeholder="Сюда можно вставить текст" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
+    <div class="row">
+      <button id="btnParse" class="btn primary">Разобрать</button>
+      <button id="btnAdd" class="btn ghost">+ Человек вручную</button>
+    </div>
+    <p id="parseMsg" class="msg" hidden></p>
+    <div id="summary" class="summary" hidden></div>
+    <div id="people"></div>
+  </section>
+
+  <section class="card">
+    <h2><span class="n">4</span>Файлы для банка</h2>
+    <p id="blockers" class="msg warn" hidden></p>
+    <div class="row">
+      <button id="btnShare" class="btn primary" disabled>Отправить: PDF + Excel</button>
+    </div>
+    <div class="row">
+      <button id="btnPdf" class="btn" disabled>Сохранить PDF</button>
+      <button id="btnXlsx" class="btn" disabled>Сохранить Excel</button>
+      <button id="btnDocx" class="btn ghost" disabled>Word про запас</button>
+    </div>
+    <p id="buildMsg" class="msg" hidden></p>
+    <dl id="letterFields" class="fields"></dl>
+  </section>
+
+  <section class="card" id="tplCard">
+    <h2><span class="n">★</span>Бланк</h2>
+    <p class="muted small">Шаблоны письма и списка с реквизитами, печатью и подписью. Загружаются один раз и хранятся только в этом браузере на этом устройстве, в интернет не попадают. Копии держите в «Файлах», в папке «На iPhone».</p>
+    <dl class="tpl">
+      <div><dt>Письмо (Word)</dt><dd id="tplDocx" class="no">не загружен</dd>
+        <label class="btn small">Выбрать<input id="tplDocxIn" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden></label></div>
+      <div><dt>Список (Excel)</dt><dd id="tplXlsx" class="no">не загружен</dd>
+        <label class="btn small">Выбрать<input id="tplXlsxIn" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden></label></div>
+    </dl>
+    <p id="tplMsg" class="msg" hidden></p>
+    <button id="btnTplDel" class="btn small danger" hidden>Удалить шаблоны с устройства</button>
+  </section>
+
+  <section class="card quiet">
+    <button id="btnClear" class="btn danger">Очистить всё</button>
+    <p class="muted small">Люди хранятся только в памяти этой страницы: ничего не записывается на устройство и никуда не отправляется. Закрыли страницу — данных нет. Если инструмент свёрнут больше 15 минут, список очищается сам.</p>
+    <p class="muted small" id="ver"></p>
+  </section>
+</main>
+
+<div id="toast" class="toast" hidden></div>
+
+<script src="vendor/jszip.min.js"></script>
+<script src="gosb.js"></script>
+<script src="core.js"></script>
+<script src="io.js"></script>
+<script src="vendor/fonts.js"></script>
+<script src="pdfgen.js"></script>
+<script src="docx-render.js"></script>
+<script src="fill.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
