@@ -1,7 +1,7 @@
 /* Интерфейс. Люди хранятся только в переменной state.people. */
 (function () {
   'use strict';
-  var VERSION = '0.2 · бланк, PDF, Excel по шаблону';
+  var VERSION = '0.3 · разбор паспортов с Госуслуг и сканов';
   var C = window.SBCore, G = window.SB_GOSB, IO = window.SBIO;
   var $ = function (id) { return document.getElementById(id); };
 
@@ -273,7 +273,7 @@
   function fileDate() { return C.fmtDate(letterDate()); }
   function xlsxName() { return 'Приложение Список сотрудников ' + fileDate() + '.xlsx'; }
   function letterName(ext) { return 'Письмо на допуск ' + fileDate() + '.' + ext; }
-  function subject() { return state.gosb ? 'Согласование доступа / ГОСБ ' + state.gosb.gosb + ' ' + C.subjectRegion(state.gosb) : ''; }
+  function subject() { return state.gosb ? 'Согласование доступа / ГОСБ ' + C.gosbCodes(state.gosb) + ' ' + C.subjectRegion(state.gosb) : ''; }
   var BODY = 'Добрый день, коллеги.\n\nПросьба, пожалуйста, принять в работу документы из вложения.\n\nСпасибо.';
 
   function period() {
@@ -292,7 +292,7 @@
         series: p.passport.slice(0, 4), number: p.passport.slice(4), phone: p.phone
       };
     });
-    var dd = { outNo: no, date: C.fmtDate(d), contract: g.contract, place: g.bankGen + ' ГОСБ №' + g.gosb + ' ' + g.phrase,
+    var dd = { outNo: no, date: C.fmtDate(d), contract: g.contract, place: g.bankGen + ' ГОСБ №' + C.gosbCodes(g) + ' ' + g.phrase,
       periodStart: C.fmtDate(per.start), periodEnd: C.fmtDate(per.end), people: people };
     var contractDigits = (/№\s*(\d+)/.exec(g.contract) || [])[1] || '';
     return Promise.all([

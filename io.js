@@ -74,8 +74,9 @@
       var path = target.charAt(0) === '/' ? target.slice(1) : 'xl/' + target.replace(/^\.\//, '');
       var f = zip.file(path); if (!f) continue;
       var sh = xml(await f.async('string'));
+      var heads = null;
       Array.prototype.forEach.call(sh.getElementsByTagNameNS(NS_MAIN, 'row'), function (row) {
-        var cells = [];
+        var cells = [], numeric = {};
         kids(row, NS_MAIN, 'c').forEach(function (c) {
           var idx = colIndex(c.getAttribute('r'));
           if (idx < 0) idx = cells.length;
@@ -88,13 +89,29 @@
           else if (v) {
             var num = Number(v.textContent);
             if (dateStyles[s] && num > 0 && num < 80000) val = SBCore.fmtDate(excelDate(num));
-            else if (isFinite(num) && Math.floor(num) === num) val = num.toFixed(0);
+            else if (isFinite(num) && Math.floor(num) === num) { val = num.toFixed(0); numeric[idx] = 1; }
             else val = v.textContent;
           }
           cells[idx] = String(val).replace(/[\t\n]+/g, ' ');
         });
         for (var k = 0; k < cells.length; k++) if (cells[k] === undefined) cells[k] = '';
-        if (cells.join('').trim()) lines.push(cells.join('\t'));
+        if (!cells.join('').trim()) return;
+        var low = cells.map(function (x) { return String(x).toLowerCase(); });
+        if (!heads && low.some(function (x) { return /фио|фамили|паспорт|серия|рожд/.test(x); })) heads = low;  // строка заголовков
+        else if (heads) {
+          for (var c2 = 0; c2 < cells.length; c2++) {
+            var h = heads[c2] || '';
+            // ИНН, номер договора, телефон — не паспорт: в разбор людей не идут
+            if (/инн|огрн|кпп|снилс|договор|телефон|(^|[^а-яё])тел([^а-яё]|$)|организаци/.test(h)) { cells[c2] = ''; continue; }
+            if (!numeric[c2]) continue;      // чиним только числа: у текста Excel нули не теряет
+            var v2 = cells[c2], n2 = +v2;
+            if (/рожд/.test(h) && n2 > 3000 && n2 < 60000) cells[c2] = SBCore.fmtDate(excelDate(n2));   // дата числом
+            else if (/серия/.test(h) && !/номер/.test(h) && v2.length < 4) cells[c2] = ('0000' + v2).slice(-4);  // 0312 → 312
+            else if (/номер/.test(h) && !/серия|телеф/.test(h) && v2.length < 6) cells[c2] = ('000000' + v2).slice(-6);
+            else if (/паспорт/.test(h) && v2.length >= 7 && v2.length < 10) cells[c2] = ('0000000000' + v2).slice(-10);
+          }
+        }
+        lines.push(cells.join('\t'));
       });
       lines.push('');
     }

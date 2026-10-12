@@ -1,6 +1,6 @@
 /* Кэш приложения для работы без интернета. Кэшируются только файлы самого инструмента;
    данные людей сюда не попадают — страница их никуда не передаёт. */
-var CACHE = 'sb-dostup-v2';
+var CACHE = 'sb-dostup-v3';
 var FILES = [
   './', './index.html', './app.css', './app.js', './core.js', './io.js', './gosb.js',
   './pdfgen.js', './docx-render.js', './fill.js', './vendor/fonts.js',

@@ -19,7 +19,10 @@
     'бизнес трейд бт телеком сбербанк сбер банк гражданство гражданин гражданка адрес регистрация место прописка ' +
     'дополнительно примечание всего добрый день коллеги спасибо просьба пожалуйста уважаемые прошу согласовать доступ ' +
     'допуск снилс инн пол муж жен январь февраль март апрель май июнь июль август сентябрь октябрь ноябрь декабрь ' +
-    'краснодарскому ростовской ставропольскому москве москва санкт петербург петербурге'
+    'краснодарскому ростовской ставропольскому москве москва санкт петербург петербурге уважением ' +
+    'российская российской федерация федерации кем пол место жительства зарегистрирован регистрации крым крыма ' +
+    'крымской украинской ссср сср обл р-на р-н гор пгт ул кв госуслуги паспортные данные сведения ' +
+    'гражданина вид документа документ удостоверяющий личность'
   ).split(/\s+/).reduce(function (m, w) { if (w) m[w] = 1; return m; }, {});
 
   var PATR = /(вич|вна|ич|ична|оглы|кызы|угли|кизи)$/i;
@@ -91,6 +94,7 @@
       /(^|[^\d])(\d{1,2})[.\/](\d{1,2})[.\/](\d{4}|\d{2})(?!\d)/g,
       /(^|[^\d])(\d{1,2})-(\d{1,2})-(\d{4})(?!\d)/g,
       /(^|[^\d])(\d{4})-(\d{2})-(\d{2})(?!\d)/g,
+      /(^|[^\d,])(\d{1,2}) ?[.,\/] ?(\d{1,2}) ?[.,\/] ?(\d{4})(?![\d,])/g,   // 01,02,1985 / 01 .02.1985 / 01.02. 1985
       /(^|[^\dА-Яа-яЁё])(\d{1,2})\s+(января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)\s+(\d{4})(?:\s*г\.?(?:ода)?)?/gi
     ];
     res.forEach(function (re, idx) {
@@ -99,17 +103,28 @@
         var start = m.index + m[1].length, end = m.index + m[0].length;
         var d;
         if (idx === 2) d = mkDate(+m[2], +m[3], +m[4]);
-        else if (idx === 3) d = mkDate(+m[4], MONTHS[m[3].toLowerCase()], +m[2]);
+        else if (idx === 4) d = mkDate(+m[4], MONTHS[m[3].toLowerCase()], +m[2]);
         else d = mkDate(fullYear(m[4]), +m[3], +m[2]);
         if (!d) continue;
         if (out.some(function (o) { return start < o.end && end > o.start; })) continue;
-        // метка: ищем ближайшее слово слева в пределах 40 символов на той же строке
+        // метка: ближайшее слово слева на той же строке (до 40 символов)
         var ls = text.lastIndexOf('\n', start - 1) + 1;
         var back = text.slice(Math.max(ls, start - 40), start).toLowerCase();
+        if (ls > 0 && text.slice(ls, start).replace(/[ \t.·]/g, '').length <= 4) {
+          // карточка паспорта (Госуслуги, скан): подпись «Дата выдачи» / «Пол Дата рождения» строкой выше
+          var pls = text.lastIndexOf('\n', ls - 2) + 1;
+          var prev = text.slice(pls, ls).toLowerCase();
+          if (!/\d/.test(prev)) back = prev + ' ' + back;
+        }
+        // подпись относится только к ближайшей дате: «выдан 12.03.2010, 01.02.1985» — вторая уже не дата выдачи
+        back = back.split(/\d{1,2} ?[.\/,\-] ?\d{1,2} ?[.\/,\-] ?\d{2,4}|\d{4}-\d{2}-\d{2}|·{6,}/).pop();
+        var bi = -1, ii = -1, mm, bre = /рожд|д\.\s?р|г\.\s?р|д\/р|(^|[^а-яё])др(?![а-яё])|родил/g, ire = /выда|выд\.|(^|[^а-яё])от(?![а-яё])/g;
+        while ((mm = bre.exec(back))) bi = mm.index;
+        while ((mm = ire.exec(back))) ii = mm.index;
         var label = '';
-        var bi = Math.max(back.lastIndexOf('рожд'), back.search(/д\.\s?р|г\.\s?р|родил/) );
-        var ii = Math.max(back.lastIndexOf('выда'), back.lastIndexOf('выд.'));
         if (bi >= 0 || ii >= 0) label = bi > ii ? 'birth' : 'issue';
+        var ahead = text.slice(end, end + 20).toLowerCase();
+        if (/^\s*(г\.?\s?р|года\s+рожд|г\.\s*рожд|гр(?![а-яё])|д\.?\s?р)/.test(ahead)) label = 'birth';   // «01.02.1985 г.р.»
         out.push({ type: 'date', start: start, end: end, date: d, label: label });
       }
     });
@@ -117,6 +132,9 @@
   }
 
   function maskNoise(text) {
+    // номера после слов ИНН / ОГРН / СНИЛС / договор — не паспорт
+    text = text.replace(/((?:инн|огрн|кпп|снилс|договор[а-яё]*)[ \t]*(?:№|N|номер)?[ \t]*:?[ \t]*)(\d[\d \-]{6,}\d)/gi,
+      function (all, pre, num) { return pre + new Array(num.length + 1).join('·'); });
     var res = [
       /()(\d{3}-\d{3}-\d{3}[ \-]\d{2})/g,                                     // СНИЛС
       /()(\+\s?7[\s(\-]*\d{3}[\s)\-]*\d{3}[\s\-]*\d{2}[\s\-]*\d{2})/g,         // +7 телефоны
@@ -133,6 +151,9 @@
   }
 
   function findPassports(text) {
+    // «серия 6009, номер 123456» / «6009 № 123456» / «серия: 60 09; номер: 123456» — склеиваем серию и номер
+    text = text.replace(/(^|[^\d])(\d{2}[ \t]?\d{2})([ \t]*[,;:.]?[ \t]*(?:номер|№|н\.|no\.?)?[ \t]*[:.]?[ \t]*)(\d{6})(?!\d)/gi,
+      function (all, pre, ser, mid, num) { return pre + ser + new Array(mid.length + 1).join(' ') + num; });
     // убираем слова-связки между серией и номером, сохраняя позиции
     var t = text.replace(/(серия|серии|сер\.|номер|№|No\.?|N)(?=[\s\d])/gi, function (m) { return new Array(m.length + 1).join(' '); });
     var out = [];
@@ -176,6 +197,8 @@
     var m;
     while ((m = ini1.exec(text))) {
       if (STOP[m[2].toLowerCase()]) continue;
+      // «Тестович Д.Р. 01.02.1985» — это «дата рождения», а не инициалы
+      if (PATR.test(m[2]) || (/^(ДР|ГР)$/.test(m[3] + m[4]) && /^\.?\s*[:\-]?\s*\d/.test(text.slice(m.index + m[0].length, m.index + m[0].length + 6)))) continue;
       var s = m.index + m[1].length;
       out.push({ type: 'fio', start: s, end: m.index + m[0].length, initials: true,
         surname: titleCase(m[2]), name: m[3] + '.', patr: m[4] + '.' });
@@ -263,6 +286,12 @@
     }) && lineKeys.filter(function (k) { return byLine[k].some(function (e) { return e.type === 'fio'; }); })
       .every(function (k) { return byLine[k].some(function (e) { return e.type !== 'fio'; }); });
 
+    // паспорт или дата на отдельной строке под ФИО — запись в несколько строк, а не таблица
+    if (tableLike && lineKeys.some(function (k) {
+      var arr = byLine[k];
+      return !arr.some(function (e) { return e.type === 'fio'; }) && arr.some(function (e) { return e.type === 'passport' || e.type === 'date'; });
+    })) tableLike = false;
+
     var groups = [];
     if (tableLike) {
       lineKeys.forEach(function (k) {
@@ -299,8 +328,14 @@
         birth = cands[0];
       }
       if (birth) p.birth = fmtDate(birth.date);
+      p._bd = birth ? birth.date : null;
       return p;
     });
+    // «ФИО» без паспорта и без правдоподобной даты рождения — заголовки, подписи, место рождения: убираем,
+    // если в тексте есть хотя бы один человек с данными
+    var real = function (p) { return p.passport || (p._bd && ageOn(p._bd, refDate) >= 14); };
+    if (people.some(real)) people = people.filter(real);
+    people.forEach(function (p) { delete p._bd; });
     return validate(people, refDate);
   }
 
@@ -390,14 +425,17 @@
       .replace('Ямало-Ненецкий АО', 'Ямало-Ненецкий автономный округ')
       .replace('Ханты-Мансийский АО', 'Ханты-Мансийский автономный округ');
   }
+  // ГОСБ, у которых в письме указывается несколько кодов вместо номера из справочника
+  var GOSB_CODES = { '9040': '1023, 1024, 1025, 1026' };
+  function gosbCodes(g) { return GOSB_CODES[g.gosb] || g.gosb; }
   function placePhrase(g) {
-    return 'во все ВСП ' + g.bankGen + ' ГОСБ №' + g.gosb + ' ' + g.phrase + ' ПАО «Сбербанк»';
+    return 'во все ВСП ' + g.bankGen + ' ГОСБ №' + gosbCodes(g) + ' ' + g.phrase + ' ПАО «Сбербанк»';
   }
 
   var API = {
     parsePeople: parsePeople, validate: validate, parseDateStr: parseDateStr, fmtDate: fmtDate,
     genPhone: genPhone, outNumber: outNumber, accessPeriod: accessPeriod, addMonths: addMonths, addDays: addDays,
-    searchGosb: searchGosb, subjectRegion: subjectRegion, placePhrase: placePhrase, pad2: pad2
+    searchGosb: searchGosb, subjectRegion: subjectRegion, placePhrase: placePhrase, gosbCodes: gosbCodes, pad2: pad2
   };
   root.SBCore = API;
   if (typeof module !== 'undefined') module.exports = API;
